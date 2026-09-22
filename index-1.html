@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Para Ti :3 💛</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Librerías Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <!-- Carta Modal / Mensaje Largo al presionar un ramo -->
+  <div class="card-modal" id="cardModal">
+    <h2 id="modalTitle">Para Ti 🌻</h2>
+    <div class="modal-content-scroll">
+      <p id="modalBody">Mensaje especial...</p>
+    </div>
+    <button class="close-btn" onclick="toggleModal(false)">Cerrar Carta ✨</button>
+  </div>
+
+  <!-- Contenedor WebGL Pantalla Completa -->
+  <div id="webgl-container"></div>
+
+  <script>
+    // --- 1. ESCENA Y CONFIGURACIÓN PANTALLA COMPLETA ---
+    const container = document.getElementById('webgl-container');
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 25, 50);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+
+    // --- 2. GENERADOR DE TEXTO / SPRITES ---
+    function createTextSprite(content, fontSize = 36) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 512;
+      canvas.height = 128;
+
+      ctx.font = `Bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.fillStyle = '#ffeb3b';
+      ctx.shadowColor = '#ff9800';
+      ctx.shadowBlur = 16;
+
+      ctx.fillText(content, 256, 64);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      return new THREE.Sprite(spriteMaterial);
+    }
+
+    // --- 3. DIBUJO DE RAMOS RECORTADOS CON FONDO TRANSPARENTE ---
+    function createBouquetTexture(type) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Limpiar canvas para asegurar 100% transparencia de fondo
+      ctx.clearRect(0, 0, 512, 512);
+
+      // Dibujar Envoltorio/Lazo del Ramo
+      ctx.fillStyle = '#fbc02d';
+      ctx.beginPath();
+      ctx.moveTo(200, 480);
+      ctx.lineTo(312, 480);
+      ctx.lineTo(360, 280);
+      ctx.lineTo(152, 280);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cinta del Ramo
+      ctx.fillStyle = '#e65100';
+      ctx.fillRect(190, 340, 132, 24);
+
+      // Dibujar Flores según tipo
+      const flowers = [
+        { x: 256, y: 180, r: 50 },
+        { x: 190, y: 220, r: 42 },
+        { x: 322, y: 220, r: 42 },
+        { x: 210, y: 130, r: 40 },
+        { x: 302, y: 130, r: 40 },
+        { x: 256, y: 80, r: 45 }
+      ];
+
+      flowers.forEach(f => {
+        // Pétalos
+        const petalCount = type === 'sunflower' ? 12 : 8;
+        ctx.fillStyle = type === 'sunflower' ? '#ffc107' : '#fff59d';
+        for (let i = 0; i < petalCount; i++) {
+          const angle = (i * Math.PI * 2) / petalCount;
+          const px = f.x + Math.cos(angle) * (f.r * 1.1);
+          const py = f.y + Math.sin(angle) * (f.r * 1.1);
+          ctx.beginPath();
+          ctx.arc(px, py, f.r * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Centro de la Flor
+        ctx.fillStyle = type === 'sunflower' ? '#3e2723' : '#f57f17';
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    // --- 4. ESPIRAL GALÁCTICA AMARILLA ---
+    const particleCount = 14000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    const colorCore = new THREE.Color('#fffde7');
+    const colorInner = new THREE.Color('#ffeb3b');
+    const colorOuter = new THREE.Color('#ff9800');
+
+    for (let i = 0; i < particleCount; i++) {
+      const r = Math.pow(Math.random(), 2) * 36;
+      const arms = 3;
+      const theta = (i % arms) * ((2 * Math.PI) / arms) + r * 0.28;
+
+      const x = Math.cos(theta) * r + (Math.random() - 0.5) * 2.2;
+      const y = (Math.random() - 0.5) * 2;
+      const z = Math.sin(theta) * r + (Math.random() - 0.5) * 2.2;
+
+      positions[i * 3] = x;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = z;
+
+      let mixedColor = colorCore.clone();
+      if (r < 10) {
+        mixedColor.lerp(colorInner, r / 10);
+      } else {
+        mixedColor.copy(colorInner).lerp(colorOuter, (r - 10) / 26);
+      }
+
+      colors[i * 3] = mixedColor.r;
+      colors[i * 3 + 1] = mixedColor.g;
+      colors[i * 3 + 2] = mixedColor.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.22,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending
+    });
+
+    const galaxyMesh = new THREE.Points(geometry, particleMaterial);
+    scene.add(galaxyMesh);
+
+    // --- 5. CORAZÓN 3D CON "TE AMO" EN EL CENTRO ---
+    const floatingHeartGroup = new THREE.Group();
+    floatingHeartGroup.position.set(0, 10, 0);
+
+    for (let t = 0; t < Math.PI * 2; t += 0.16) {
+      const hx = 16 * Math.pow(Math.sin(t), 3);
+      const hy = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+
+      const heartSprite = createTextSprite('💛', 40);
+      heartSprite.position.set(hx * 0.38, hy * 0.38, 0);
+      heartSprite.scale.set(2.4, 2.4, 1);
+      floatingHeartGroup.add(heartSprite);
+    }
+
+    const centerTextSprite = createTextSprite('TE AMO', 50);
+    centerTextSprite.position.set(0, 0, 0.5);
+    centerTextSprite.scale.set(8, 2.5, 1);
+    floatingHeartGroup.add(centerTextSprite);
+
+    scene.add(floatingHeartGroup);
+
+    // --- 6. MENSAJES FLOTANTES EN ÓRBITA ---
+    const customMessages = [
+      "Te adoro 💛",
+      "Eres única ✨",
+      "Te quiero 🥰",
+      "Eres increíble 🌟",
+      "Eres mi flor amarilla 🌻"
+    ];
+
+    const orbitingMessagesGroup = new THREE.Group();
+    customMessages.forEach((msg, idx) => {
+      const sprite = createTextSprite(msg, 36);
+      const angle = (idx / customMessages.length) * Math.PI * 2;
+      const radius = 18;
+      sprite.position.set(Math.cos(angle) * radius, 10 + (idx % 2) * 2, Math.sin(angle) * radius);
+      sprite.scale.set(10, 3, 1);
+      orbitingMessagesGroup.add(sprite);
+    });
+    scene.add(orbitingMessagesGroup);
+
+    // --- 7. RAMOS TRANSPARENTES E INTERACTIVOS EN LA GALAXIA ---
+    const interactiveBouquets = [];
+
+    const bouquetData = [
+      {
+        type: "sunflower",
+        title: "para una niña especial :33 🌻",
+        body: "Si alguna vez te preguntas cuánto significas para mí, solo mira este universo <3. Te adoro con cada parte de mi ser, eres esa persona mas maravillosa, única e increíble que llena de luz cada centimetro de mi vida <3. Así como los girasoles siempre buscan al sol, yo siempre busco tu sonrisa :33 . Gracias por ser mi lugar seguro, mi alegría constante, mi flor amarilla y le doy gracias a Dios por ponerte en mi camino :3. ¡Te quiero de aquí hasta la galaxia más lejana!",
+        pos: { x: -16, y: 5, z: 12 }
+      },
+      {
+        type: "yellow",
+        title: "te quiero tanto penguana <3  💐",
+        body: "Eres increíblemente especial y no hay palabras ni estrellas suficientes para expresar lo mucho que te quiero, te quiero demasiado Talii <333. Cada día a tu lado es un regalo maravilloso, a pesar de la distancia aun te quiero. Eres mi flor amarilla, la más bonita de todo este mundo muah. Nunca olvides lo valiosa que eres y la gran felicidad que traes a mi mundo y que bonito verte en los caminos de Dios :33. ¡Te adoro hoy, mañana y para siempre <333!",
+        pos: { x: 16, y: 5, z: -12 }
+      }
+    ];
+
+    bouquetData.forEach((data) => {
+      const texture = createBouquetTexture(data.type);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.set(data.pos.x, data.pos.y, data.pos.z);
+      sprite.scale.set(12, 12, 1);
+      sprite.userData = data;
+      scene.add(sprite);
+      interactiveBouquets.push(sprite);
+    });
+
+    // --- 8. DETECCIÓN DE CLIC EN LOS RAMOS ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('pointerdown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(interactiveBouquets);
+
+      if (intersects.length > 0) {
+        const data = intersects[0].object.userData;
+        openModal(data.title, data.body);
+      }
+    });
+
+    function openModal(title, body) {
+      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('modalBody').innerText = body;
+      document.getElementById('cardModal').classList.add('active');
+    }
+
+    function toggleModal(show) {
+      const modal = document.getElementById('cardModal');
+      if (show) modal.classList.add('active');
+      else modal.classList.remove('active');
+    }
+
+    // --- 9. BUCLE DE ANIMACIÓN ---
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsedTime = clock.getElapsedTime();
+
+      galaxyMesh.rotation.y += 0.0012;
+      orbitingMessagesGroup.rotation.y -= 0.003;
+
+      floatingHeartGroup.position.y = 10 + Math.sin(elapsedTime * 1.5) * 1.2;
+
+      interactiveBouquets.forEach((sprite, i) => {
+        sprite.position.y = bouquetData[i].pos.y + Math.sin(elapsedTime * 2 + i) * 0.8;
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
